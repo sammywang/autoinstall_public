@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoInstall 使用手冊</title>
+    
+    <!-- 引入 React 與 Tailwind (透過 CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 列印專用樣式 -->
+    <style>
+        @media print {
+            aside, .no-print { display: none !important; }
+            main { margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+            .print-break { break-before: page; }
+            body { background: white; color: black; }
+            .prose { max-width: 100% !important; }
+        }
+        /* 自訂捲軸 */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 針對大字體的額外優化 */
+        body { line-height: 1.6; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans h-screen overflow-hidden text-lg">
+    <div id="root" class="h-full"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // ==========================================
+        // 圖示組件 (SVG)
+        // ==========================================
+        const IconSize = "28"; 
+        const Icons = {
+            Book: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            Terminal: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>,
+            Package: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16.5 9.4-9-5.19"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+            Wifi: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>,
+            AlertCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+            FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+            Menu: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+            ChevronRight: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
+            Printer: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+            Folder: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
+            Link: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
+            Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+            Monitor: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>,
+            Compass: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>,
+            Usb: () => <svg xmlns="http://www.w3.org/2000/svg" width={IconSize} height={IconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 7v10"/><path d="M14 7v10"/><rect x="7" y="17" width="10" height="4" rx="2"/><path d="M12 7V3"/><path d="M10 3h4"/><path d="M7 17v-6a4 4 0 0 1 5-3.5 4 4 0 0 1 5 3.5v6"/></svg>,
+        };
+
+        // ==========================================
+        // 主應用程式
+        // ==========================================
+        function App() {
+            const [activeSection, setActiveSection] = useState('intro');
+            const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            const [printMode, setPrintMode] = useState(false);
+
+            // 資料內容
+            const manualData = {
+                // #region [1. Intro]
+                intro: {
+                title: "1. 產品概觀",
+                icon: <Icons.Book />,
+                content: (
+                    <div className="space-y-8 text-slate-700 text-lg">
+                    <div className="bg-blue-50 p-6 rounded-lg border-l-8 border-blue-500">
+                        <h3 className="font-bold text-blue-800 text-2xl mb-4">AutoInstall 是什麼？</h3>
+                        <p className="text-lg leading-relaxed">
+                        AutoInstall 是一款專為 Windows 部署環境（如 Microsoft Intune、SCCM）設計的通用安裝包裝器 (Universal Wrapper)。
+                        它解決了單純執行安裝檔無法處理的複雜需求，例如：設定桌布、匯入 WiFi、建立網頁捷徑、權限提升及錯誤處理。
+                        同時支援<strong>本地端隨身碟快速佈署</strong>，讓現場維護更彈性。
+                        </p>
+                    </div>
+
+                    <h3 className="text-3xl font-bold text-slate-900 border-b-2 border-slate-200 pb-4 mt-8">核心功能</h3>
+                    <ul className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FeatureCard title="權限自動提升" desc="自動檢查並嘗試以 Administrator 身分重新啟動，確保安裝權限。" />
+                        <FeatureCard title="智慧安裝偵測" desc="自動判斷 EXE/MSI/Appx，智慧填入靜默參數，無需手動查指令。" />
+                        <FeatureCard title="USB 快速佈署" desc="支援隨身碟現場安裝模式。腳本執行後可立即拔除 USB，安裝過程在背景自動完成。" />
+                        <FeatureCard title="資源下載整合" desc="支援從 HTTP/HTTPS 或 SMB 網芳下載安裝檔，並具備雜湊 (Hash) 驗證功能。" />
+                        <FeatureCard title="環境配置" desc="包含字型安裝、登錄檔匯入、桌布/鎖定畫面設定、WiFi 設定檔匯入。" />
+                        <FeatureCard title="Intune 封裝整合" desc="內建自動封裝功能，可直接生成 .intunewin 檔案與偵測腳本。" />
+                    </ul>
+
+                    <div className="mt-8 bg-slate-100 p-6 rounded-lg border border-slate-300">
+                        <h4 className="font-bold text-slate-800 text-xl mb-4 flex items-center gap-3">
+                            <Icons.Settings /> 深入了解：智慧偵測邏輯
+                        </h4>
+                        <div className="space-y-4 text-lg">
+                            <p>當您未在 <code>config.ini</code> 指定 <code>InstallerName</code> 時，程式會依以下邏輯自動運作：</p>
+                            <ul className="list-disc list-inside space-y-2 ml-4 text-slate-700">
+                                <li><strong>單一檔案原則：</strong> 程式會掃描根目錄下的 <code>.exe</code>, <code>.msi</code>, <code>.appx</code> 或 <code>.zip</code>。</li>
+                                <li><strong>嚴格檢查：</strong> 為了避免執行錯誤，<strong>目錄下只能有一個安裝檔</strong>。若發現多個可能的安裝檔，程式會報錯並停止執行。</li>
+                                <li><strong>MSI 優化：</strong> 若偵測到 <code>.msi</code>，會自動補上 <code>/qn /norestart</code> 參數，確保靜默安裝。</li>
+                                <li><strong>ZIP 處理：</strong> 若偵測到唯一的 <code>.zip</code> 檔，程式會自動解壓縮，並進入該資料夾執行安裝。</li>
+                            </ul>
+                        </div>
+                    </div>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [2. Structure]
+                structure: {
+                title: "2. 目錄結構",
+                icon: <Icons.FileText />,
+                content: (
+                    <div className="space-y-8 text-slate-700 text-lg">
+                    <p className="text-lg">這是完整的建議目錄結構，程式會掃描此結構來執行對應任務。只要建立對應的資料夾或檔案，功能就會自動啟用。</p>
+                    
+                    <div className="bg-slate-900 text-slate-300 p-8 rounded-xl font-mono text-lg overflow-x-auto shadow-lg leading-relaxed">
+                        <div className="flex flex-col gap-2 min-w-[700px]">
+                        <span className="text-yellow-400 font-bold text-xl">程式目錄/</span> <span className="text-gray-500 opacity-80">// [打包目錄] 上傳到 Intune 的根目錄</span>
+                        <span className="ml-6">│</span>
+                        
+                        {/* 核心 Core */}
+                        <span className="ml-6">├── <span className="text-green-400 font-bold">AutoInstall.exe</span>      <span className="text-gray-500">← [核心] 主程式</span></span>
+                        <span className="ml-6">├── <span className="text-green-400 font-bold">config.ini</span>           <span className="text-gray-500">← [核心] 設定檔 (UTF-8 編碼)</span></span>
+                        <span className="ml-6">│</span>
+
+                        {/* 工具 Tools */}
+                        <span className="ml-6">├── <span className="text-slate-400">IntuneWinAppUtil.exe</span> <span className="text-gray-500">← [工具] Intune 封裝工具 (若無會自動下載)</span></span>
+                        <span className="ml-6">├── <span className="text-slate-400">PsExe64.exe</span>         <span className="text-gray-500">← [工具] 系統權限模擬工具 (測試用，非必要)</span></span>
+                        <span className="ml-6">├── <span className="text-slate-400">4.USB安裝.cmd</span>         <span className="text-gray-500">← [工具] 本地端快速佈署腳本</span></span>
+                        <span className="ml-6">├── <span className="text-slate-400">1.互動模式.cmd</span>        <span className="text-gray-500">← [工具] 快速開啟互動選單</span></span>
+                        <span className="ml-6">│</span>
+                        
+                        {/* 預先部署 Pre-install */}
+                        <span className="ml-6 text-slate-500">// [預先部署] 在安裝主程式前執行</span>
+                        <span className="ml-6">├── <span className="text-purple-400 font-bold">Deps/</span>              <span className="text-gray-500">← [目錄] 依賴元件 (.appx, .msix)</span></span>
+                        <span className="ml-6">├── <span className="text-blue-400 font-bold">Fonts/</span>             <span className="text-gray-500">← [目錄] 字型檔 (.ttf, .otf)</span></span>
+                        <span className="ml-6">├── <span className="text-green-400 font-bold">Reg/</span>               <span className="text-gray-500">← [目錄] 登錄檔 (.reg)</span></span>
+                        <span className="ml-6">│</span>
+
+                        {/* 軟體與腳本 Software & Scripts */}
+                        <span className="ml-6">├── <span className="text-blue-400">setup.exe</span>            <span className="text-gray-500">← [軟體] 安裝程式 (名稱需對應 config)</span></span>
+                        <span className="ml-6">├── <span className="text-teal-400">install.cmd</span>          <span className="text-gray-500">← [腳本] 自訂 CMD 安裝腳本</span></span>
+                        <span className="ml-6">├── <span className="text-teal-400">install.bat</span>          <span className="text-gray-500">← [腳本] 自訂 BAT 安裝腳本</span></span>
+                        <span className="ml-6">├── <span className="text-teal-400">install.ps1</span>          <span className="text-gray-500">← [腳本] 自訂 PowerShell 安裝腳本</span></span>
+                        <span className="ml-6">│</span>
+
+                        {/* 視覺 Visuals */}
+                        <span className="ml-6">├── <span className="text-pink-400">wallpaper.jpg</span>        <span className="text-gray-500">← [視覺] 企業桌布 (檔名需對應 config)</span></span>
+                        <span className="ml-6">├── <span className="text-pink-400">lockscreen.jpg</span>       <span className="text-gray-500">← [視覺] 鎖定畫面</span></span>
+                        <span className="ml-6">│</span>
+
+                        {/* 桌面捷徑 Desktop Shortcuts */}
+                        <span className="ml-6">├── <span className="text-yellow-300 font-bold">Desktop/</span>            <span className="text-gray-500">← [目錄] 存放要「新增」到桌面的捷徑</span></span>
+                        <span className="ml-6">│   ├── 公司系統.lnk</span>
+                        <span className="ml-6">│   └── 報修網頁.url</span>
+                        <span className="ml-6">│</span>
+                        
+                        <span className="ml-6">├── <span className="text-red-300 font-bold">delDesktop/</span>         <span className="text-gray-500">← [目錄] 存放要「刪除」的舊捷徑</span></span>
+                        <span className="ml-6">│   ├── 舊版ERP.lnk</span>
+                        <span className="ml-6">│   └── 垃圾廣告.lnk</span>
+                        <span className="ml-6">│</span>
+
+                        {/* 圖示 Icons */}
+                        <span className="ml-6">├── <span className="text-purple-300 font-bold">Icons/</span>              <span className="text-gray-500">← [目錄] 存放圖示素材 (對應 IconPath)</span></span>
+                        <span className="ml-6">│   ├── App.ico         <span className="text-gray-500 opacity-60">(純圖檔，非捷徑)</span></span>
+                        <span className="ml-6">│   └── Logo.png</span>
+                        <span className="ml-6">│</span>
+
+                        {/* WiFi */}
+                        <span className="ml-6">├── <span className="text-orange-300">wifi.txt</span>           <span className="text-gray-500">← [檔案] 整合新增與刪除 (格式: SSID, delete)</span></span>
+                        <span className="ml-6">├── <span className="text-orange-300 font-bold">wifi/</span>               <span className="text-gray-500">← [目錄] 存放 WiFi XML 設定檔 (自動匯入)</span></span>
+                        <span className="ml-6">│</span>
+
+                        {/* 網頁捷徑 URLs */}
+                        <span className="ml-6">└── <span className="text-cyan-300">urls.txt</span>           <span className="text-gray-500">← [檔案] 整合新增與刪除 (支援 delete 指令)</span></span>
+                        </div>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg">
+                        <h4 className="font-bold text-yellow-800 text-xl flex items-center gap-3 mb-2">
+                        <Icons.AlertCircle /> 結構說明
+                        </h4>
+                        <ul className="list-disc list-inside mt-3 text-lg text-yellow-700 space-y-2">
+                        <li><strong>核心檔案：</strong> <code>AutoInstall.exe</code> 與 <code>config.ini</code> 為必要項目。</li>
+                        <li><strong>預先部署：</strong> <code>Deps</code>、<code>Fonts</code>、<code>Reg</code> 目錄若存在，會在執行 <code>setup.exe</code> 之前優先處理。</li>
+                        <li><strong>彈性配置：</strong> 其他所有目錄與檔案 (如 WiFi, Icons, Desktop)都是<strong>選用</strong>的。程式偵測到目錄存在才會執行對應功能。</li>
+                        <li><strong>刪除功能：</strong> 若要刪除 WiFi 或網頁捷徑，請直接在 <code>wifi.txt</code> 或 <code>urls.txt</code> 內使用 <code>delete</code> 語法 (例如：SSID, delete)，<strong>不支援且無需建立</strong> <code>delwifi.txt</code> 或 <code>delurls.txt</code>。</li>
+                        </ul>
+                    </div>
+                    </div>
+                )
+                },
+                // #endregion
+                // #region [3. Config]
+                config: {
+                title: "3. 設定檔 (config.ini)",
+                icon: <Icons.Settings />,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                    <p className="text-lg">所有行為皆由 <code>config.ini</code> 控制。請務必將此檔案存檔為 <strong>UTF-8</strong> 編碼。</p>
+
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-lg text-lg text-blue-800 mb-6">
+                        在大多數的標準安裝情境下，您無需修改此設定檔，或僅需進行微調即可實現自動化安裝。以下為各參數的詳細用途說明：
+                    </div>
+
+                    <table className="w-full text-left text-lg border-collapse">
+                        <thead className="bg-slate-100 text-slate-600">
+                        <tr>
+                            <th className="p-4 border-b text-xl">參數 (Key)</th>
+                            <th className="p-4 border-b text-xl">說明</th>
+                            <th className="p-4 border-b text-xl">範例</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                        {/* 1. 來源與下載設定 */}
+                        <tr><td colSpan="3" className="bg-slate-50 p-3 font-bold text-slate-500 text-base">1. 來源與下載設定</td></tr>
+                        <ConfigRow k="DownloadURL" v="安裝檔下載網址 (支援 HTTP 或 \\SMB)。" e="http://site.com/app.zip" />
+                        
+                        <ConfigRow 
+                            k="DownloadName" 
+                            v="下載後儲存的檔名 (若為 ZIP 會自動解壓)。" 
+                            e="Installer.zip, Setup.exe, App.appx" 
+                        />
+                        
+                        <ConfigRow k="DownloadUser" v="SMB 網芳驗證帳號 (若 DownloadURL 為 \\ 開頭)。" e="MyDomain\User" />
+                        <ConfigRow k="DownloadPass" v="SMB 密碼 (初次填寫明碼，程式執行後會自動加密)。" e="MySecret123" />
+                        
+                        <tr className="hover:bg-slate-50 transition-colors break-inside-avoid">
+                            <td className="p-4 border-b border-slate-100 font-mono text-blue-600 font-medium text-lg">DownloadHash</td>
+                            <td className="p-4 border-b border-slate-100 text-slate-700 text-lg">
+                                檔案雜湊驗證 (SHA256)。
+                                <div className="mt-3 text-base text-slate-500 bg-slate-100 p-3 rounded">
+                                    <strong>注意：</strong>若目錄下存在 <code>hash.txt</code>，將優先使用該檔案內容。
+                                    <br/><br/>
+                                    <strong>💡 自動產生：</strong>網管人員無需手動計算。當 <code>hash.txt</code> 不存在時，程式於測試執行期間會自動計算並產生此檔案。您只需將其保留在封裝包中即可。
+                                </div>
+                            </td>
+                            <td className="p-4 border-b border-slate-100 text-base text-slate-500 font-mono bg-slate-50/50">A1B2... (64碼)</td>
+                        </tr>
+
+                        {/* 2. 安裝核心設定 */}
+                        <tr><td colSpan="3" className="bg-slate-50 p-3 font-bold text-slate-500 text-base">2. 安裝核心設定</td></tr>
+                        <ConfigRow k="InstallerName" v="實際執行的安裝程式名稱 (若未指定會自動偵測)。" e="setup.exe" />
+                        
+                        <tr className="hover:bg-slate-50 transition-colors break-inside-avoid">
+                            <td className="p-4 border-b border-slate-100 font-mono text-blue-600 font-medium text-lg">InstallerArgs</td>
+                            <td className="p-4 border-b border-slate-100 text-slate-700 text-lg">
+                                安裝參數 (靜默安裝開關)。
+                                <div className="mt-3 text-base text-slate-500 bg-slate-100 p-3 rounded space-y-2">
+                                    <p><strong>📦 MSI (Windows Installer)：</strong><br/>
+                                    無需設定。程式會自動補上 <code>/qn /norestart</code> 參數。</p>
+                                    
+                                    <p><strong>⚙️ EXE (執行檔)：</strong><br/>
+                                    <span className="text-red-500 font-bold">注意！</span> EXE 沒有統一標準，必須手動查詢廠商文件或使用 <code>/?</code> 查詢。常見參數如下：</p>
+                                    <ul className="list-disc list-inside ml-2 text-slate-600 font-mono">
+                                        <li>InstallShield: <code>/s /v /qn</code></li>
+                                        <li>Inno Setup: <code>/VERYSILENT /SUPPRESSMSGBOXES /NORESTART</code></li>
+                                        <li>NSIS: <code>/S</code> (注意需大寫)</li>
+                                        <li>Wise: <code>/s</code></li>
+                                        <li>WinRAR (自解壓): <code>-S</code></li>
+                                        <li><strong className="text-purple-600">強制無參數：</strong> 若要強制不使用參數，請填寫 <code>None</code>。</li>
+                                    </ul>
+                                </div>
+                            </td>
+                            <td className="p-4 border-b border-slate-100 text-base text-slate-500 font-mono bg-slate-50/50">/S /Silent /qn</td>
+                        </tr>
+
+                        <ConfigRow k="KillProcess" v="安裝前強制關閉的處理程序名稱 (舊名 KillProcessName 亦可)。" e="chrome, firefox" />
+                        
+                        <ConfigRow 
+                            k="PostKillProcess" 
+                            v="安裝完成後，強制關閉指定的程序。常用於處理安裝完會自動跳出視窗導致部署卡住的軟體。" 
+                            e="notepad++, esscore" 
+                        />
+
+                        <ConfigRow 
+                            k="RemoveName" 
+                            v="指定移除時的特定識別名稱 (用於 /uninstall 模式)。若不在此設定，也可於執行時透過參數 /u:名稱 直接指定。提示：您可以使用本程式的偵測模式 (/d) 來獲取精確的識別名稱。" 
+                            e="Google Chrome" 
+                        />
+
+                        {/* 3. 環境與後處理 */}
+                        <tr><td colSpan="3" className="bg-slate-50 p-3 font-bold text-slate-500 text-base">3. 環境與後處理</td></tr>
+                        <ConfigRow k="IconPath" v="Icon 素材複製目的地 (將 Icons 資料夾內容複製到此)。" e="C:\ProgramData\Icons" />
+                        <ConfigRow k="CleanMode" v="桌面清理模式 (Public=僅公用桌面, AllUsers=掃描所有使用者)。" e="AllUsers" />
+
+                        {/* 4. 視覺與體驗 */}
+                        <tr><td colSpan="3" className="bg-slate-50 p-3 font-bold text-slate-500 text-base">4. 視覺與體驗</td></tr>
+                        <ConfigRow k="Wallpaper" v="設定桌布圖檔 (格式: 檔名, 模式)。lock=強制鎖定, unlock=僅更換。" e="bg.jpg, lock" />
+                        <ConfigRow k="LockScreen" v="設定鎖定畫面圖檔 (格式同上)。" e="lock.jpg, unlock" />
+                        <ConfigRow k="CompletionMessage" v="安裝完成後彈出的系統通知訊息 (Toast)。" e="系統更新已完成" />
+
+                        {/* 5. Intune 偵測 */}
+                        <tr><td colSpan="3" className="bg-slate-50 p-3 font-bold text-slate-500 text-base">5. Intune 偵測標記</td></tr>
+                        <ConfigRow k="ValidationTag" v="安裝成功後建立的標記檔名 (位於 C:\ProgramData\IntuneTags)。" e="App_v1.tag" />
+                        </tbody>
+                    </table>
+
+                    <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg mt-6">
+                        <h4 className="font-bold text-yellow-800 text-xl mb-3">💡 關於安裝腳本</h4>
+                        <p className="text-lg text-yellow-700">
+                            若要執行腳本，請直接在目錄中放入 <strong>install.cmd</strong>, <strong>install.bat</strong> 或 <strong>install.ps1</strong>，程式會在安裝完成後自動偵測並執行。
+                        </p>
+                    </div>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.0. Guide Intro]
+                guide_intro: {
+                title: "4. 自動安裝指引",
+                icon: <Icons.Compass />,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                        <p className="text-lg">AutoInstall 設計了多種自動化機制來簡化您的部署工作。本章節將引導您了解各項輔助功能與實作方式。</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_pre')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Folder /> 4.1 環境預先安裝
+                                </h4>
+                                <p className="text-lg text-slate-600">在主程式安裝前，自動處理字型、登錄檔或依賴元件。</p>
+                            </div>
+
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_guide_msi')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Book /> 4.2 安裝說明示範 (MSI)
+                                </h4>
+                                <p className="text-lg text-slate-600">以 Everything MSI 為例，手把手教學從準備到封裝的完整流程。</p>
+                            </div>
+
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_guide_exe')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Book /> 4.3 安裝說明示範 (EXE)
+                                </h4>
+                                <p className="text-lg text-slate-600">以 Notepad++ 為例，教學如何測試靜默參數與封裝。</p>
+                            </div>
+
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_guide_net')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Book /> 4.4 連線安裝說明示範
+                                </h4>
+                                <p className="text-lg text-slate-600">以「臺南市成績處理連線版」為例，示範中文檔名處理與參數測試。</p>
+                            </div>
+
+                            {/* [新增] 4.5 USB 安裝示範 */}
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_usb')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Usb /> 4.5 USB 隨身碟快速佈署
+                                </h4>
+                                <p className="text-lg text-slate-600">無需 Intune，將檔案載入暫存區後即可拔除 USB，適合現場維護。</p>
+                            </div>
+                            
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_url')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Link /> 4.6 網頁捷徑與清理
+                                </h4>
+                                <p className="text-lg text-slate-600">批次部署 URL 捷徑，或使用 App Mode 打造原生應用體驗。</p>
+                            </div>
+
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setActiveSection('spec_net')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Wifi /> 4.7 網路設定
+                                </h4>
+                                <p className="text-lg text-slate-600">自動匯入 WiFi 設定檔 (XML) 或簡易密碼設定。</p>
+                            </div>
+
+                            <div className="p-6 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer col-span-1 md:col-span-2" onClick={() => setActiveSection('spec_desktop')}>
+                                <h4 className="font-bold text-blue-600 mb-3 text-xl flex items-center gap-3">
+                                    <Icons.Monitor /> 4.8 桌面管理與清理
+                                </h4>
+                                <p className="text-lg text-slate-600">派發實體捷徑 (.lnk) 或執行全域桌面清理。</p>
+                            </div>
+                        </div>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.1. Pre-install]
+                spec_pre: {
+                title: "4.1. 環境預先安裝 (Pre-install)",
+                icon: <Icons.Folder />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                    <p className="text-lg">這些資料夾內的檔案會在執行主安裝程式<strong>之前</strong>自動處理。這對於需要安裝依賴庫 (Dependencies) 或企業標準環境配置非常有用。</p>
+                    
+                    <div className="grid gap-6 md:grid-cols-1">
+                        <div className="border border-slate-200 rounded-lg p-6 bg-white">
+                            <h4 className="font-bold text-slate-800 text-xl mb-2 flex items-center gap-3">
+                                <span className="text-purple-500">📁 Deps/</span> 
+                                <span className="text-base font-normal text-slate-500 bg-slate-100 px-3 py-1 rounded">依賴元件 (全能版)</span>
+                            </h4>
+                            <p className="text-lg text-slate-600 mb-4">
+                                將所有前置軟體丟進來，程式會依據副檔名自動選擇最佳安裝策略。
+                            </p>
+                            
+                            <div className="space-y-4">
+                                <div className="bg-slate-50 p-4 rounded border border-slate-100 text-lg">
+                                    <strong className="text-slate-800 block mb-2">🛠️ EXE 執行檔 (智慧參數偵測)</strong>
+                                    <ul className="list-decimal list-inside text-slate-600 space-y-2 ml-2 text-base mb-3">
+                                        <li><strong>策略 1 (最高優先)：</strong>若存在同名文字檔 (例如 <code>setup.exe.txt</code>)，讀取內容作為參數。</li>
+                                        <li><strong>策略 2 (關鍵字)：</strong>自動識別 <code>vcredist</code>, <code>dotnet</code>, <code>webview2</code> 等 Runtime，自動給予 <code>/install /quiet</code>。</li>
+                                        <li><strong>策略 3 (通用)：</strong>識別 <code>setup</code>, <code>install</code> 給予 <code>/S</code>，否則嘗試 <code>/quiet</code>。</li>
+                                    </ul>
+                                    <div className="mt-3 p-3 bg-red-50 text-red-700 text-base border border-red-100 rounded">
+                                        <strong>⚠️ 重要提醒：</strong>
+                                        EXE 執行檔派發前請務必先在本機測試靜默參數是否有效，否則可能會因彈出對話視窗而導致安裝程序無限期卡住 (Hang)。
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded border border-slate-100 text-lg">
+                                    <strong className="text-slate-800 block mb-2">📦 MSI 安裝檔</strong>
+                                    <p className="text-base text-slate-600">
+                                        完全自動化。程式會自動補上 <code>/qn /norestart</code> 執行標準靜默安裝。
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded border border-slate-100 text-lg">
+                                    <strong className="text-slate-800 block mb-2">🛍️ Store Apps (.appx, .msix, .bundle)</strong>
+                                    <ul className="list-disc list-inside text-slate-600 space-y-2 ml-2 text-base">
+                                        <li><strong>支援格式：</strong>標準 Store App 格式 (<code>.appx</code>, <code>.msix</code>, <code>.appxbundle</code>, <code>.msixbundle</code>)。</li>
+                                        <li><strong>雙重安裝機制：</strong>
+                                            <span className="block ml-6 text-slate-500">1. 優先嘗試 <strong>DISM</strong> 全機佈建 (Provisioning)。</span>
+                                            <span className="block ml-6 text-slate-500">2. 若失敗，自動降級為 <strong>PowerShell</strong> 當前使用者安裝。</span>
+                                        </li>
+                                        <li className="text-red-600 font-bold mt-2">⚠️ 重要限制：</li>
+                                        <li className="text-red-700 ml-6">
+                                            請勿使用加密格式 (<code>.eappx</code>, <code>.emsix</code>)。
+                                            <br/>
+                                            <span className="text-base font-normal text-slate-500">原因：System 帳號無 Microsoft Store 憑證，無法通過加密驗證，安裝必失敗。請務必使用「未加密」的離線安裝包。</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-lg p-6 bg-white">
+                            <h4 className="font-bold text-slate-800 text-xl mb-2 flex items-center gap-3">
+                                <span className="text-blue-500">📁 Fonts/</span> 
+                                <span className="text-base font-normal text-slate-500 bg-slate-100 px-3 py-1 rounded">字型部屬</span>
+                            </h4>
+                            <p className="text-lg text-slate-600 mb-3">
+                                批次安裝企業標準字型。
+                            </p>
+                            <ul className="list-disc list-inside text-base text-slate-500 space-y-2 ml-2">
+                                <li>支援格式：<code>.ttf</code>, <code>.otf</code></li>
+                                <li>執行動作：複製到 <code>C:\Windows\Fonts</code> 並自動寫入對應的登錄檔機碼 (HKLM)。</li>
+                            </ul>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-lg p-6 bg-white">
+                            <h4 className="font-bold text-slate-800 text-xl mb-2 flex items-center gap-3">
+                                <span className="text-green-500">📁 Reg/</span> 
+                                <span className="text-base font-normal text-slate-500 bg-slate-100 px-3 py-1 rounded">登錄檔匯入</span>
+                            </h4>
+                            <p className="text-lg text-slate-600 mb-3">
+                                預先匯入系統設定或軟體授權資訊。
+                            </p>
+                            <ul className="list-disc list-inside text-base text-slate-500 space-y-2 ml-2">
+                                <li>支援格式：<code>.reg</code></li>
+                                <li>執行動作：自動迴圈執行 <code>reg.exe import "檔案"</code>。</li>
+                            </ul>
+                        </div>
+                    </div>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.2. Guide MSI]
+                spec_guide_msi: {
+                title: "4.2. 安裝說明示範 (MSI)",
+                icon: <Icons.Book />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                        <p className="text-lg">本章節將以實際案例，手把手示範如何使用 AutoInstall 進行單檔自動佈署。</p>
+
+                        {/* MSI 案例 */}
+                        <section>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded text-base">格式一</span>
+                                MSI 安裝檔佈署範例
+                            </h3>
+
+                            {/* [新增] Intune 原生支援備註 & 教育版入口 */}
+                            <div className="bg-blue-50 border-l-4 border-blue-400 p-6 mb-8 rounded-r text-lg text-blue-800">
+                                <strong>💡 備註：</strong> INTUNE (含教育版) 原生即支援 MSI 檔案發佈 (Line-of-Business App)。
+                                <br/>
+                                若您的需求僅是<strong>單純安裝該 MSI</strong>，而不需要額外配置環境 (如：建立特殊捷徑、安裝字型、匯入 WiFi 或登錄檔)，您也可以直接在 Intune 後台選擇「Line-of-business app」上傳即可，不一定要使用本工具封裝。
+                                <br/>
+                                <span className="text-blue-600 opacity-80 mt-2 block text-base">
+                                    (AutoInstall 的價值在於：能同時處理安裝後的環境標準化設定，解決單純 MSI 無法做到的細節。)
+                                </span>
+                                
+                                {/* 教育版連結 */}
+                                <div className="mt-4 pt-4 border-t border-blue-200">
+                                    <a 
+                                        href="https://intuneeducation.portal.azure.com/" 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-3 font-bold text-blue-700 hover:text-blue-900 hover:underline transition-colors text-lg"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                        前往 Intune for Education 管理入口
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div className="bg-white border border-slate-200 p-8 rounded-lg shadow-sm">
+                                <div className="flex items-center gap-6 mb-6 border-b border-slate-100 pb-6">
+                                    <div className="w-16 h-16 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold text-2xl">1</div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-xl">案例目標</h4>
+                                        <p className="text-lg text-slate-500">
+                                            佈署軟體：<strong>Everything 1.4.1 (搜尋工具)</strong><br/>
+                                            檔案名稱：<code>Everything-1.4.1.1030.x64.MSI</code>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    {/* 步驟 1 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 1：準備檔案</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            將 <code>Everything-1.4.1.1030.x64.MSI</code> 放入與 <code>AutoInstall.exe</code> 同一層目錄。
+                                        </p>
+                                        
+                                        <div className="mb-4">
+                                            <a 
+                                                href="https://www.voidtools.com/Everything-1.4.1.1030.x64.msi" 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-3 text-blue-600 hover:text-blue-800 text-lg bg-blue-50 px-4 py-2 rounded border border-blue-100 transition-colors"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                                下載範例檔案 (官方連結)
+                                            </a>
+                                        </div>
+
+                                        <div className="bg-slate-900 text-slate-300 p-4 rounded font-mono text-base">
+                                            root/<br/>
+                                            ├── AutoInstall.exe<br/>
+                                            ├── config.ini<br/>
+                                            └── <span className="text-blue-400">Everything-1.4.1.1030.x64.MSI</span>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 2 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 2：設定 config.ini (可選)</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            由於 AutoInstall 具備智慧偵測功能，針對這種「單一 MSI 檔案」的情境，<strong>您其實完全不需要修改 config.ini</strong>。
+                                        </p>
+                                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-lg text-yellow-800">
+                                            <strong>🤖 自動化行為：</strong><br/>
+                                            程式會自動偵測到唯一的 MSI 檔，並自動補上 <code>/qn /norestart</code> 參數執行靜默安裝。
+                                        </div>
+                                        <p className="text-lg text-slate-500 mt-3">
+                                            (當然，如果您希望明確指定，也可以修改 <code>InstallerName=Everything-1.4.1.1030.x64.MSI</code>，但在單檔情境下非必要)
+                                        </p>
+                                    </div>
+
+                                    {/* 步驟 3 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 3：測試安裝</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            在封裝前，建議先在本機測試一次。直接點擊執行 <code>AutoInstall.exe</code>。
+                                        </p>
+                                        <ul className="list-disc list-inside text-lg text-slate-600 ml-4">
+                                            <li>觀察視窗是否顯示「發現 MSI: ... (自動參數: /qn /norestart)」</li>
+                                            <li>確認軟體是否成功安裝且無跳出視窗。</li>
+                                        </ul>
+                                    </div>
+
+                                    {/* 步驟 4 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 4：執行封裝 (二擇一)</h5>
+                                        
+                                        {/* 方法 1 */}
+                                        <div className="mb-8">
+                                            <h6 className="font-bold text-blue-600 text-lg mb-3 flex items-center gap-3">
+                                                <span className="bg-blue-100 px-3 py-1 rounded text-base">推薦</span> 
+                                                方法 1：使用互動選單 (簡單)
+                                            </h6>
+                                            <p className="text-lg text-slate-600 mb-3">
+                                                直接執行目錄下的 <code>1.互動模式.CMD</code> (或 <code>AutoInstall.exe /i</code>)。
+                                            </p>
+                                            <div className="bg-slate-800 text-green-400 p-6 rounded-lg font-mono text-base mb-4 shadow-inner">
+                                            <pre>{`=============================================
+   AutoInstall 互動模式
+=============================================
+   ...
+   4. 自動封裝成INTUNE Win32 應用程式 (/Pack /p)
+   5. 結束程式 (Exit)
+=============================================
+請選擇模式 [1-5]: 4
+請輸入封裝後的程式名稱: Everything`}</pre>
+                                            </div>
+                                            <ul className="list-disc list-inside text-lg text-slate-500 ml-4">
+                                                <li>輸入 <strong>4</strong> 選擇封裝模式，接著輸入名稱 <strong>Everything</strong> 即可。</li>
+                                            </ul>
+                                        </div>
+
+                                        {/* 方法 2 */}
+                                        <div className="bg-slate-50 p-6 rounded border border-slate-200">
+                                            <h6 className="font-bold text-slate-700 text-lg mb-3 flex items-center gap-3">
+                                                <Icons.Terminal className="w-5 h-5" />
+                                                方法 2：手動指令 (進階)
+                                            </h6>
+                                            <p className="text-lg text-slate-600 mb-3">
+                                                若您習慣使用指令，可以使用隨附的工具開啟當前目錄的 CMD：
+                                            </p>
+                                            <ol className="list-decimal list-inside text-lg text-slate-600 space-y-3 ml-4">
+                                                <li>執行 <code>3.1_管理員權限CMD視窗.CMD</code> (確保取得 Admin 權限)。</li>
+                                                <li>在跳出的黑色視窗中，輸入以下指令：
+                                                    <div className="mt-2 bg-white border border-slate-300 p-3 rounded font-mono text-base text-slate-800 select-all">
+                                                        AutoInstall.exe /p:Everything
+                                                    </div>
+                                                </li>
+                                            </ol>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 5 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 5：上傳至 Intune</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            封裝程式會自動產生 <code>detect.ps1</code> 偵測腳本，這讓上傳過程變得非常簡單。
+                                        </p>
+                                        <div className="bg-green-50 p-6 rounded border border-green-200">
+                                            <strong className="text-green-800 text-lg mb-2 block">✅ Intune 設定重點：</strong>
+                                            <ul className="list-disc list-inside text-lg text-green-900 space-y-2">
+                                                <li><strong>App package file:</strong> 上傳產生的 <code>Everything.intunewin</code></li>
+                                                <li><strong>Install command:</strong> <code>AutoInstall.exe</code></li>
+                                                <li><strong>Uninstall command:</strong> <code>AutoInstall.exe /u:Everything</code></li>
+                                                <li><strong>Detection Rules (關鍵):</strong>
+                                                    <ul className="list-disc list-inside ml-6 mt-1 text-base text-green-700">
+                                                        <li>Rules format: 選擇 <strong>Use a custom detection script</strong></li>
+                                                        <li>Script file: 上傳程式自動產生的 <strong>detect.ps1</strong></li>
+                                                    </ul>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.3. Guide EXE]
+                spec_guide_exe: {
+                title: "4.3. 安裝說明示範 (EXE)",
+                icon: <Icons.Book />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                        {/* EXE 案例 */}
+                        <section>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                <span className="bg-green-100 text-green-600 px-3 py-1 rounded text-base">格式二</span>
+                                EXE 安裝檔佈署範例
+                            </h3>
+                            
+                            <div className="bg-white border border-slate-200 p-8 rounded-lg shadow-sm">
+                                <div className="flex items-center gap-6 mb-6 border-b border-slate-100 pb-6">
+                                    <div className="w-16 h-16 bg-green-50 rounded-lg flex items-center justify-center text-green-600 font-bold text-2xl">2</div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-xl">案例目標</h4>
+                                        <p className="text-lg text-slate-500">
+                                            佈署軟體：<strong>Notepad++ v8.8.8 (文字編輯器)</strong><br/>
+                                            檔案名稱：<code>npp.8.8.8.Installer.x64.exe</code>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    {/* 步驟 1 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 1：準備檔案</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            將安裝檔放入目錄中。建議將檔名簡化 (例如改為 <code>npp_setup.exe</code>)，避免特殊符號造成錯誤。
+                                        </p>
+                                        
+                                        <div className="mb-4">
+                                            <a 
+                                                href="https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.8/npp.8.8.8.Installer.x64.exe" 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-3 text-green-600 hover:text-green-800 text-lg bg-green-50 px-4 py-2 rounded border border-green-100 transition-colors"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                                下載範例檔案 (Notepad++ v8.8.8 官方連結)
+                                            </a>
+                                        </div>
+
+                                        <div className="bg-slate-900 text-slate-300 p-4 rounded font-mono text-base">
+                                            root/<br/>
+                                            ├── AutoInstall.exe<br/>
+                                            ├── config.ini<br/>
+                                            └── <span className="text-green-400">npp.8.8.8.Installer.x64.exe</span>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 2 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 2：查詢靜默參數 (關鍵!)</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            EXE 每個廠商的參數都不同，<strong>必須先手動測試</strong>。
+                                        </p>
+                                        
+                                        <div className="bg-yellow-50 border border-yellow-200 p-6 rounded text-lg mb-4">
+                                            <strong className="text-yellow-800 block mb-2">🛠️ 如何測試參數？</strong>
+                                            <ol className="list-decimal list-inside text-yellow-700 space-y-2">
+                                                <li>執行隨附工具 <code>3.1_管理員權限CMD視窗.CMD</code> 開啟黑色視窗。</li>
+                                                <li>輸入：<code>npp.8.8.8.Installer.x64.exe /?</code> (試試看有無說明視窗)。</li>
+                                                <li>或上網搜尋 "Notepad++ silent install"。</li>
+                                                <li><span className="text-green-700 font-bold">測試結果：</span> Notepad++ 使用 NSIS 封裝，參數為 <code>/S</code> (注意大寫)。</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 3 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 3：設定 config.ini</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            打開 <code>config.ini</code>，填入正確的檔名與測試過的參數。
+                                        </p>
+                                        <div className="bg-slate-100 p-4 rounded border border-slate-200 font-mono text-base text-slate-700">
+                                            InstallerName=<span className="text-green-600 font-bold">npp.8.8.8.Installer.x64.exe</span><br/>
+                                            InstallerArgs=<span className="text-blue-600 font-bold">/S</span>
+                                        </div>
+                                        <p className="text-base text-slate-500 mt-3">
+                                            * 若不設定 Args，AutoInstall 雖然會嘗試智慧偵測，但明確指定是最保險的。
+                                        </p>
+                                    </div>
+
+                                    {/* 步驟 4 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 4：執行模擬安裝</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            在封裝前，<strong>務必</strong>執行一次 <code>AutoInstall.exe</code> 看看是否會跳出視窗。
+                                        </p>
+                                        <div className="p-4 bg-red-50 text-red-700 text-base border border-red-100 rounded flex items-start gap-3">
+                                            <Icons.AlertCircle className="w-5 h-5 mt-1 shrink-0" />
+                                            <div>
+                                                <strong>警告：</strong>如果安裝過程跳出了「下一步」或「完成」的視窗，代表靜默失敗！<br/>
+                                                請不要進行封裝，否則派送到使用者端時會因為沒人點擊而無限期卡住 (Hang)。
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* [新增] 步驟 5：檢查 ValidationTag */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 5：檢查 ValidationTag (重要)</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            在執行封裝前，請再次打開 <code>config.ini</code> 檢查 <code>ValidationTag</code> 設定。
+                                        </p>
+                                        <div className="bg-blue-50 p-6 rounded border border-blue-200">
+                                            <h6 className="font-bold text-blue-800 text-lg mb-3 flex items-center gap-2">
+                                                <Icons.Settings className="w-5 h-5" />
+                                                設定建議
+                                            </h6>
+                                            <ul className="list-disc list-inside text-lg text-slate-700 space-y-3">
+                                                <li>
+                                                    <strong>建議留空 (預設)：</strong><br/>
+                                                    <span className="text-base text-slate-600 ml-6">
+                                                        若 <code>ValidationTag=</code> (空白)，封裝程式會自動產生一個與專案同名的標記 (例如 <code>Notepad++.tag</code>)，並自動產生對應的偵測腳本。
+                                                    </span>
+                                                </li>
+                                                <li>
+                                                    <strong>指定名稱：</strong><br/>
+                                                    <span className="text-base text-slate-600 ml-6">
+                                                        若您填寫了 (例如 <code>ValidationTag=V1.0.tag</code>)，程式一樣會自動產生對應此名稱的 <code>detect.ps1</code> 來偵測此檔案。
+                                                        <br/>
+                                                        <span className="text-blue-600 font-bold ml-0">結論：無論是否指定，您在 Intune 都只需上傳 detect.ps1 即可，完全無需手動設定偵測路徑。</span>
+                                                    </span>
+                                                </li>
+                                            </ul>
+                                            <div className="mt-4 p-3 bg-white border border-blue-100 rounded text-base text-blue-900 font-mono">
+                                                ValidationTag=<span className="text-slate-400"> (留白即可)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 6 (原步驟 5) */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 6：執行封裝</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            確認全程無跳窗且安裝成功後，即可執行封裝。
+                                        </p>
+                                        <div className="bg-slate-50 p-6 rounded border border-slate-200">
+                                            <h6 className="font-bold text-blue-600 text-lg mb-3 flex items-center gap-3">
+                                                <span className="bg-blue-100 px-3 py-1 rounded text-base">推薦</span> 
+                                                使用互動選單
+                                            </h6>
+                                            <p className="text-lg text-slate-600 mb-3">
+                                                執行 <code>1.互動模式.CMD</code> ➜ 輸入 <code>4</code> ➜ 輸入名稱 <code>Notepad++</code>。
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* [修正] 步驟 7 (Intune 上傳，強調使用 detect.ps1) */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 7：上傳至 Intune</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            封裝程式會自動產生 <code>detect.ps1</code> 偵測腳本，這讓上傳過程變得非常簡單。
+                                        </p>
+                                        <div className="bg-green-50 p-6 rounded border border-green-200">
+                                            <strong className="text-green-800 text-lg mb-2 block">✅ Intune 設定重點：</strong>
+                                            <ul className="list-disc list-inside text-lg text-green-900 space-y-2">
+                                                <li><strong>App package file:</strong> 上傳產生的 <code>Notepad++.intunewin</code></li>
+                                                <li><strong>Install command:</strong> <code>AutoInstall.exe</code></li>
+                                                <li><strong>Uninstall command:</strong> <code>AutoInstall.exe /u:Notepad++</code></li>
+                                                <li><strong>Detection Rules (關鍵):</strong>
+                                                    <ul className="list-disc list-inside ml-6 mt-1 text-base text-green-700">
+                                                        <li>Rules format: 選擇 <strong>Use a custom detection script</strong></li>
+                                                        <li>Script file: 上傳程式自動產生的 <strong>detect.ps1</strong></li>
+                                                    </ul>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.4. Guide Net (NEW)]
+                spec_guide_net: {
+                title: "4.4. 連線安裝說明示範 (臺南市成績處理連線版)",
+                icon: <Icons.Book />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                        {/* 連線版案例 */}
+                        <section>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded text-base">格式三</span>
+                                特殊 EXE (WinRAR 自解檔 / 下載模式)
+                            </h3>
+                            
+                            <div className="bg-white border border-slate-200 p-8 rounded-lg shadow-sm">
+                                <div className="flex items-center gap-6 mb-6 border-b border-slate-100 pb-6">
+                                    <div className="w-16 h-16 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 font-bold text-2xl">3</div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-800 text-xl">案例目標</h4>
+                                        <p className="text-lg text-slate-500">
+                                            佈署軟體：<strong>臺南市成績處理連線版</strong><br/>
+                                            特色：WinRAR 自解檔 (-S)、安裝後會自動跳出視窗 (需強制關閉)。
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    {/* 步驟 1 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 1：策略規劃</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            本案例示範<strong>直接透過 DownloadURL 下載</strong>，確保每次重灌都是最新版本。並利用 <code>PostKillProcess</code> 參數解決安裝後自動開啟軟體的問題。
+                                        </p>
+                                        <div className="bg-slate-50 border border-slate-200 p-4 rounded text-base mb-3">
+                                            <strong className="text-slate-800 block mb-1">🎯 部署策略：</strong>
+                                            <ul className="list-disc list-inside text-slate-600">
+                                                <li><strong>來源：</strong> 官方網站 HTTP 連結。</li>
+                                                <li><strong>更名：</strong> 自動更名為 <code>esscore.exe</code> (避免中文亂碼)。</li>
+                                                <li><strong>清理：</strong> 安裝前殺 Process (避免佔用)，安裝後殺 Process (避免卡住)。</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 2 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 2：設定 config.ini (關鍵)</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            請依照以下範例填寫 <code>config.ini</code>。只需複製貼上以下內容即可：
+                                        </p>
+                                        
+                                        <div className="bg-slate-800 text-green-400 p-6 rounded-lg font-mono text-base shadow-inner overflow-x-auto">
+                                            <div className="mb-2 text-slate-400">; [1. 來源與下載設定]</div>
+                                            <div className="whitespace-nowrap">DownloadURL=<span className="text-yellow-300">http://oat.dcps.tn.edu.tw/esscore/%E8%87%BA%E5%8D%97%E5%B8%82%E6%88%90%E7%B8%BE%E8%99%95%E7%90%86%E9%80%A3%E7%B7%9A%E7%89%88.exe</span></div>
+                                            <div className="mb-4">DownloadName=<span className="text-yellow-300">esscore.exe</span></div>
+
+                                            <div className="mb-2 text-slate-400">; [2. 安裝核心設定]</div>
+                                            <div>InstallerName=<span className="text-yellow-300">esscore.exe</span></div>
+                                            <div className="mb-2">InstallerArgs=<span className="text-blue-300">-S</span></div>
+                                            <div className="mb-2">KillProcess=<span className="text-red-300">esscore</span></div>
+                                            <div className="mb-4">PostKillProcess=<span className="text-red-300">esscore</span></div>
+                                            
+                                            <div className="mb-2 text-slate-400">; [5. Intune 偵測標記]</div>
+                                            <div>ValidationTag=</div>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 3 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 3：測試安裝流程</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            執行 <code>AutoInstall.exe</code> 進行測試，請觀察是否符合以下自動化流程：
+                                        </p>
+                                        <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-lg">
+                                            <ol className="list-decimal list-inside text-lg text-yellow-800 space-y-2">
+                                                <li><strong>下載：</strong> 程式自動下載並儲存為 <code>esscore.exe</code>。</li>
+                                                <li><strong>前置清理：</strong> 若您原本有開啟成績系統，應會被自動關閉 (KillProcess)。</li>
+                                                <li><strong>靜默安裝：</strong> 背景執行 WinRAR 解壓縮，無跳出視窗。</li>
+                                                <li><strong>後置清理 (重點)：</strong> 安裝結束後，程式會自動偵測並關閉跳出的主程式視窗 (PostKillProcess)，確保安裝流程順利結束，不會卡住。</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 4 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 4：執行封裝</h5>
+                                        <p className="text-lg text-slate-600 mb-3">
+                                            確認本機測試成功 (且視窗會自動關閉) 後，即可進行封裝。
+                                        </p>
+                                        <div className="bg-slate-50 p-6 rounded border border-slate-200">
+                                            <h6 className="font-bold text-blue-600 text-lg mb-3 flex items-center gap-3">
+                                                <span className="bg-blue-100 px-3 py-1 rounded text-base">推薦</span> 
+                                                使用互動選單
+                                            </h6>
+                                            <p className="text-lg text-slate-600 mb-3">
+                                                執行 <code>1.互動模式.CMD</code> ➜ 輸入 <code>4</code> ➜ 輸入名稱 <code>Esscore_Tainan</code>。
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* 步驟 5 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">步驟 5：上傳至 Intune</h5>
+                                        <div className="bg-green-50 p-6 rounded border border-green-200">
+                                            <strong className="text-green-800 text-lg mb-2 block">✅ Intune 設定重點：</strong>
+                                            <ul className="list-disc list-inside text-lg text-green-900 space-y-2">
+                                                <li><strong>App package file:</strong> 上傳 <code>Esscore_Tainan.intunewin</code></li>
+                                                <li><strong>Install command:</strong> <code>AutoInstall.exe</code></li>
+                                                <li>
+                                                    <strong>Uninstall command:</strong> <code>AutoInstall.exe /u:none</code>
+                                                    <br />
+                                                    <span className="text-sm text-green-700 ml-6">
+                                                        (備註：本程式已原生支援 <code>/u:none</code> 參數。針對綠色軟體，這比使用 <code>cmd /c echo done</code> 更正規，能讓程式立即且優雅地結束。)
+                                                    </span>
+                                                </li>
+                                                <li><strong>Detection Rules:</strong>
+                                                    <ul className="list-disc list-inside ml-6 mt-1 text-base text-green-700">
+                                                        <li>Rules format: 選擇 <strong>Use a custom detection script</strong></li>
+                                                        <li>Script file: 上傳程式自動產生的 <strong>detect.ps1</strong></li>
+                                                    </ul>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )
+                },
+                // #endregion
+                // #region [4.5. Guide USB (NEW)]
+                spec_usb: {
+                title: "4.5. USB 隨身碟快速佈署 (Local Deploy)",
+                icon: <Icons.Usb />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                        {/* USB 案例 */}
+                        <section>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded text-base">現場維護</span>
+                                USB 隨身碟快速佈署
+                            </h3>
+                            
+                            <div className="bg-white border border-slate-200 p-8 rounded-lg shadow-sm">
+                                <p className="text-lg text-slate-600 mb-6 leading-relaxed">
+                                    專為現場維護人員設計。只需將隨身碟插入電腦，執行腳本後即可拔除，安裝程序會在背景自動完成。
+                                </p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                    <div className="bg-orange-50 p-6 rounded-lg border border-orange-100 text-center">
+                                        <div className="text-3xl mb-2">🚀</div>
+                                        <h4 className="font-bold text-orange-800 text-xl mb-2">即插即用</h4>
+                                        <p className="text-base text-orange-700">自動複製到暫存區執行，不依賴網路。</p>
+                                    </div>
+                                    <div className="bg-orange-50 p-6 rounded-lg border border-orange-100 text-center">
+                                        <div className="text-3xl mb-2">⚡</div>
+                                        <h4 className="font-bold text-orange-800 text-xl mb-2">秒拔隨身碟</h4>
+                                        <p className="text-base text-orange-700">檔案載入記憶體後，指令視窗會提示可拔除。</p>
+                                    </div>
+                                    <div className="bg-orange-50 p-6 rounded-lg border border-orange-100 text-center">
+                                        <div className="text-3xl mb-2">🧹</div>
+                                        <h4 className="font-bold text-orange-800 text-xl mb-2">自動清理</h4>
+                                        <p className="text-base text-orange-700">安裝完成後自動刪除暫存檔案，不佔用空間。</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    {/* 步驟 1 */}
+                                    <div>
+                                        <h5 className="font-bold text-slate-700 text-xl mb-3">使用步驟</h5>
+                                        <div className="bg-slate-50 border border-slate-200 p-6 rounded-lg mb-4">
+                                            <strong className="text-slate-800 block mb-2">💾 準備隨身碟：</strong>
+                                            <p className="text-base text-slate-600 mb-2">您可以選擇以下兩種方式之一準備 USB：</p>
+                                            <ul className="list-disc list-inside text-base text-slate-600 space-y-1 ml-2">
+                                                <li><strong>方式 A (原始檔)：</strong> 將整包 AutoInstall 資料夾 (含 exe, config, 安裝檔) 複製到 USB。</li>
+                                                <li><strong>方式 B (封裝包)：</strong> 將打包後的 PACKAGE 資料夾放入 USB，並記得將 <code>4.USB安裝.cmd</code> 也放進去。</li>
+                                            </ul>
+                                        </div>
+
+                                        <ol className="list-decimal list-inside text-lg text-slate-600 space-y-3 ml-2">
+                                            <li>將 USB 隨身碟插入目標電腦。</li>
+                                            <li>
+                                                右鍵點擊 <strong><code>4.USB安裝.cmd</code></strong>，選擇「以系統管理員身分執行」。
+                                            </li>
+                                            <li>
+                                                等待視窗顯示綠色的 <strong>[ 複製完成 ! COPY COMPLETE ]</strong> 訊息。
+                                            </li>
+                                            <li>
+                                                <span className="text-red-600 font-bold">現在您可以安全拔除 USB 隨身碟了！</span><br/>
+                                                <span className="text-base text-slate-500 ml-6">安裝程式已載入暫存區並在背景執行，您可以立即前往下一台電腦進行部署。</span>
+                                            </li>
+                                        </ol>
+                                    </div>
+
+                                    {/* 運作原理 */}
+                                    <div className="bg-yellow-50 p-6 rounded border border-yellow-200">
+                                        <h5 className="font-bold text-yellow-800 text-lg mb-2 flex items-center gap-2">
+                                            <Icons.Settings className="w-5 h-5" />
+                                            技術細節 (運作原理)
+                                        </h5>
+                                        <ul className="list-disc list-inside text-base text-yellow-800 space-y-2">
+                                            <li>腳本會自動將整包檔案複製到 <code>%TEMP%\IntuneUSB_%RANDOM%</code>。</li>
+                                            <li>使用 <code>robocopy</code> 進行高速複製，並自動排除 log 與 hash 檔。</li>
+                                            <li>啟動 <code>LocalRunner.cmd</code> 執行安裝，並設定安裝結束後自動 <code>rmdir</code> 刪除暫存目錄。</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.6. URLs]
+                spec_url: {
+                title: "4.6. 網頁捷徑與清理 (Shortcuts)",
+                icon: <Icons.Link />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                        {/* 1. 新增捷徑 */}
+                        <section>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded text-base">urls.txt</span>
+                                批次建立捷徑
+                            </h3>
+                            <p className="text-lg mb-3">用於在桌面建立網頁捷徑、App 模式捷徑，並支援<strong>建立資料夾結構 (Subdirectory)</strong>。</p>
+                            
+                            <div className="bg-slate-100 border border-slate-200 rounded p-6 text-lg mb-6">
+                                <h4 className="font-bold text-slate-800 mb-3">🚀 功能亮點</h4>
+                                <ul className="list-disc list-inside space-y-2 text-slate-600">
+                                    <li><strong>App Mode：</strong>指定 <code>Edge</code> 或 <code>Chrome</code> 可移除瀏覽器邊框，像原生 App 一樣執行。</li>
+                                    <li><strong>自動圖示：</strong>程式會自動分析網頁並下載高解析度 Favicon。</li>
+                                    <li><strong>資料夾分類：</strong>使用 <code>subdir=</code> 指令，可將捷徑自動分類到子資料夾中。</li>
+                                </ul>
+                            </div>
+
+                            <CodeBlock title="urls.txt 進階範本 (新增模式)">
+                            {`; [格式] 網址, 捷徑名稱, [開啟模式]
+; --------------------------------------------------
+; 1. 根目錄捷徑 (直接放在桌面)
+; --------------------------------------------------
+https://www.google.com, Google搜尋
+
+; --------------------------------------------------
+; 2. 建立資料夾分類 (subdir=資料夾名稱)
+; --------------------------------------------------
+subdir=公司雲端系統
+
+; 建議使用 Edge 模式，讓這些工具像 App 一樣獨立執行
+https://portal.office.com, Microsoft 365, Edge
+https://teams.microsoft.com, Teams 會議, Edge
+
+; --------------------------------------------------
+; 3. 切換目錄 (使用 \\ 回到桌面根目錄)
+; --------------------------------------------------
+subdir=\\IT工具箱
+https://github.com, GitHub 開發者, Chrome`}
+                            </CodeBlock>
+                        </section>
+
+                        <hr className="border-slate-200" />
+
+                        {/* 2. 刪除捷徑 (修正部分) */}
+                        <section>
+                            <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                <span className="bg-red-100 text-red-600 px-3 py-1 rounded text-base">刪除模式</span>
+                                捷徑與目錄清理
+                            </h3>
+                            <p className="text-lg mb-3">
+                                若要移除舊捷徑或資料夾，請同樣使用 <code>urls.txt</code>，並搭配 <code>delete</code> 關鍵字。
+                                <br/>
+                                <span className="text-slate-500 text-base">(程式不支援 delurls.txt，請勿建立該檔案)</span>
+                            </p>
+                            
+                            <div className="grid gap-4 text-lg text-slate-600 mb-6">
+                                <div className="flex items-start gap-3">
+                                    <span className="font-bold text-slate-800 shrink-0">刪除檔案：</span>
+                                    <span>格式為 <code>名稱, delete</code>。程式會自動在目前目錄 (或 subdir 指定的目錄) 尋找並刪除同名的 .lnk 或 .url。</span>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <span className="font-bold text-slate-800 shrink-0">刪除資料夾：</span>
+                                    <span>格式為 <code>subdir=名稱,delete</code>。注意是<strong>逗號</strong> delete。</span>
+                                </div>
+                            </div>
+
+                            <CodeBlock title="urls.txt 範例 (刪除模式)">
+                            {`; [格式] 名稱, delete
+; --------------------------------------------------
+; 1. 刪除桌面上的單一檔案
+; --------------------------------------------------
+Old Shortcut, delete
+Old Web Link, delete
+
+; --------------------------------------------------
+; 2. 進入子資料夾刪除檔案
+; --------------------------------------------------
+subdir=公司雲端系統
+Old App, delete
+
+; --------------------------------------------------
+; 3. [強力模式] 刪除整個資料夾
+; 語法：subdir=資料夾名稱,delete (注意是逗號)
+; --------------------------------------------------
+subdir=舊版軟體區,delete`}
+                            </CodeBlock>
+                            
+                            <div className="mt-3 p-4 bg-red-50 text-red-800 rounded text-lg border border-red-100 flex items-start gap-3">
+                                <Icons.AlertCircle />
+                                <div>
+                                    <strong>注意：</strong> <code>,delete</code> 指令會強制移除整個資料夾及其所有內容，請小心使用。
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.7. Net]
+                spec_net: {
+                title: "4.7. 網路設定 (WiFi)",
+                icon: <Icons.Wifi />,
+                isSub: true,
+                content: (
+                    <div className="space-y-8 text-slate-700">
+                    {/* wifi.txt */}
+                    <section>
+                        <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                        <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded text-base">wifi.txt</span>
+                        快速 WiFi 設定與刪除
+                        </h3>
+                        
+                        <div className="space-y-6">
+                            {/* 新增模式 */}
+                            <div>
+                                <h6 className="font-bold text-slate-700 text-lg mb-2">模式 1：新增/更新 WiFi</h6>
+                                <p className="text-lg mb-2">簡易設定 SSID 與密碼，程式執行後會自動將密碼加密為 <code>AES:...</code> 格式。</p>
+                                <CodeBlock title="wifi.txt 範例 (新增)">
+                                {`# 格式: SSID, 密碼
+Guest_Wifi, guest1234
+Office_Wifi, securePass!@#`}
+                                </CodeBlock>
+                            </div>
+
+                            {/* 刪除模式 */}
+                            <div>
+                                <h6 className="font-bold text-red-700 text-lg mb-2">模式 2：刪除舊 WiFi</h6>
+                                <p className="text-lg mb-2">若需移除已存在的舊設定檔 (例如舊的 SSID)，可將密碼欄位填寫為 <code>delete</code>。</p>
+                                <CodeBlock title="wifi.txt 範例 (刪除)">
+                                {`# 格式: SSID, delete
+Old_Office_Wifi, delete
+Free_Public_Wifi, delete`}
+                                </CodeBlock>
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r text-base text-red-900 mt-3">
+                                    <strong className="block mb-2 text-lg">⚠️ 重要警告：</strong>
+                                    在執行刪除或修改 SSID 密碼之前，請務必確認設備（如筆電、生生用平板）已具備其他可用的連線 SSID，或本次部署已包含新的有效 SSID 設定。
+                                    <br/><br/>
+                                    否則一旦執行刪除/修改，設備將因無可用網路而斷線，甚至導致無法再透過遠端派送修復。
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    
+                     <hr className="border-slate-200" />
+
+                    {/* WiFi XML Import */}
+                    <section>
+                        <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                        <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded text-base">Wifi/</span> 
+                        進階 WiFi 設定檔 (XML)
+                        </h3>
+                        <p className="text-lg mb-3">
+                            若您需要設定更複雜的企業級 WiFi (如 WPA2-Enterprise, PEAP, 憑證驗證)，請將匯出的 <code>.xml</code> 設定檔放入 <code>Wifi</code> 資料夾中。
+                        </p>
+                        
+                        {/* 推薦工具區塊 */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 shadow-sm">
+                            <h4 className="font-bold text-blue-800 text-xl mb-4 flex items-center gap-3">
+                                <Icons.Terminal className="w-6 h-6" />
+                                🛠️ 推薦工具：WiFi 設定檔匯出小幫手
+                            </h4>
+                            <p className="text-lg text-blue-700 mb-4">
+                                隨附的 <code>5.匯出WIFI_XML.CMD</code> 可以幫您快速產生標準格式的 XML 檔，無需記憶複雜指令。
+                            </p>
+                            <div className="bg-white p-6 rounded border border-blue-100">
+                                <h5 className="font-bold text-slate-700 text-lg mb-3">使用步驟：</h5>
+                                <ol className="list-decimal list-inside text-lg text-slate-600 space-y-3">
+                                    <li>在<strong>已經成功連線過</strong>該 WiFi 的電腦上，執行此腳本。</li>
+                                    <li>程式會列出本機所有已儲存的 WiFi 設定檔。</li>
+                                    <li>輸入您要匯出的 <strong>SSID 名稱</strong> (輸入 9 可離開)。</li>
+                                    <li>腳本會自動匯出 XML 並<strong>自動更名</strong> (去除系統預設的 <code>Wi-Fi-</code> 前綴)。</li>
+                                    <li><strong className="text-blue-600">最後步驟：</strong>將產生的 <code>.xml</code> 檔案放入封裝包的 <code>Wifi/</code> 目錄即可。</li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        {/* 手動備用區塊 */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 opacity-75 hover:opacity-100 transition-opacity">
+                            <h4 className="font-bold text-slate-600 text-lg mb-3 flex items-center gap-3">
+                                <span className="text-base bg-slate-200 px-3 py-1 rounded text-slate-500">備用方法</span>
+                                手動指令匯出
+                            </h4>
+                            <p className="text-lg text-slate-500 mb-3">
+                                若無法使用腳本，您也可以在 CMD 執行以下指令：
+                            </p>
+                            <div className="bg-slate-800 text-green-400 p-4 rounded font-mono text-base mb-3 select-all overflow-x-auto">
+                                netsh wlan export profile name="SSID名稱" folder="." key=clear
+                            </div>
+                        </div>
+                    </section>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [4.8. Desktop]
+                spec_desktop: {
+                    title: "4.8. 桌面管理與清理 (Desktop)",
+                    icon: <Icons.Monitor />,
+                    isSub: true,
+                    content: (
+                        <div className="space-y-8 text-slate-700">
+                            <p className="text-lg">除了透過 <code>urls.txt</code> 建立網頁捷徑外，AutoInstall 也支援實體捷徑檔案 (<code>.lnk</code>) 的直接佈署，以及具備<strong>智慧判斷邏輯</strong>的殘留檔案清理機制。</p>
+
+                            {/* Desktop/ */}
+                            <section>
+                                <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                    <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded text-base">Desktop/</span>
+                                    捷徑佈署目錄
+                                </h3>
+                                <p className="text-lg mb-3">
+                                    這是最直覺的佈署方式。將任何您想要出現在使用者桌面上的檔案（捷徑、文件、工具）放入此資料夾。
+                                </p>
+                                <ul className="list-disc list-inside bg-white border border-slate-200 p-6 rounded-lg text-lg text-slate-600 space-y-3">
+                                    <li><strong>自動複製：</strong>程式會將此目錄下的所有內容，複製到「公用桌面」(Public Desktop)。</li>
+                                    <li><strong>所有使用者可見：</strong>因為是複製到公用桌面，所以這台電腦的所有使用者登入後都能看到這些捷徑。</li>
+                                    <li><strong>應用場景：</strong>派發 ERP 捷徑、PDF 手冊、維護工具等。</li>
+                                </ul>
+                            </section>
+
+                            <hr className="border-slate-200" />
+
+                            {/* delDesktop/ */}
+                            <section>
+                                <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
+                                    <span className="bg-red-100 text-red-600 px-3 py-1 rounded text-base">delDesktop/</span>
+                                    智慧殘留清理
+                                </h3>
+                                <p className="text-lg mb-6">
+                                    這是一個具備<strong>雙重邏輯</strong>的強力清理工具。程式會根據您建立的資料夾名稱格式，自動判斷要使用「保守模式」還是「強力模式」。
+                                </p>
+
+                                {/* 模式比較表 */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                    {/* 保守模式 */}
+                                    <div className="bg-white border-l-4 border-green-500 shadow-sm p-6 rounded-r-lg">
+                                        <h4 className="font-bold text-green-700 text-xl mb-3 flex items-center gap-2">
+                                            🛡️ 保守模式 (Safe)
+                                        </h4>
+                                        <ul className="space-y-3 text-lg text-slate-600">
+                                            <li><strong>觸發條件：</strong>一般資料夾名稱 (如 <code>Old App</code>)。</li>
+                                            <li><strong>清理目標：</strong>使用者桌面、公用桌面。</li>
+                                            <li><strong>行為邏輯：</strong>
+                                                <ul className="list-disc list-inside ml-4 mt-2 text-base text-slate-500">
+                                                    <li>只刪除對應檔名的檔案。</li>
+                                                    <li><strong>安全檢查：</strong>只有當資料夾「真的空了」才會移除。</li>
+                                                    <li><strong>防誤刪：</strong>若資料夾內含有使用者檔案 (非垃圾檔)，程式會自動略過，確保資料安全。</li>
+                                                </ul>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    {/* 強力模式 */}
+                                    <div className="bg-white border-l-4 border-red-500 shadow-sm p-6 rounded-r-lg">
+                                        <h4 className="font-bold text-red-700 text-xl mb-3 flex items-center gap-2">
+                                            ⚡ 強力模式 (Force)
+                                        </h4>
+                                        <ul className="space-y-3 text-lg text-slate-600">
+                                            <li><strong>觸發條件：</strong>環境變數格式 (如 <code>%ProgramData%</code>)。</li>
+                                            <li><strong>清理目標：</strong>系統路徑、AppConfig。</li>
+                                            <li><strong>行為邏輯：</strong>
+                                                <ul className="list-disc list-inside ml-4 mt-2 text-base text-slate-500">
+                                                    <li><strong>遞迴掃描：</strong>深入每一層子目錄。</li>
+                                                    <li><strong>強制拔除：</strong>若偵測到目錄內只剩垃圾檔 (desktop.ini 等)，將強制連根拔除。</li>
+                                                </ul>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                {/* 智慧特性說明 */}
+                                <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg">
+                                    <h4 className="font-bold text-blue-800 text-lg mb-3 flex items-center gap-3">
+                                        <Icons.Settings className="w-5 h-5" />
+                                        全新智慧特性
+                                    </h4>
+                                    <ul className="list-disc list-inside text-lg text-blue-900 space-y-2">
+                                        <li><strong>屬性強制解鎖：</strong>自動移除目標的 <code>唯讀</code>、<code>隱藏</code> 或 <code>系統</code> 屬性，解決權限不足無法刪除的問題。</li>
+                                        <li><strong>幽靈檔案過濾 (Ghost Filter)：</strong>判定空目錄時，會自動忽略 <code>Thumbs.db</code>、<code>desktop.ini</code> 與 <code>.DS_Store</code>。即使有這些垃圾檔殘留，程式仍會視為空目錄並予以刪除。</li>
+                                    </ul>
+                                </div>
+                            </section>
+                        </div>
+                    )
+                },
+                // #endregion
+
+                // #region [5. CLI]
+                cli: {
+                title: "5. 命令列與互動模式",
+                icon: <Icons.Terminal />,
+                content: (
+                    <div className="space-y-6 text-slate-700">
+                    <p className="text-lg">AutoInstall 支援多種啟動參數，預設直接執行會進入「自動安裝模式」。</p>
+
+                    <div className="grid gap-4">
+                        <CommandCard 
+                            cmd="/i" 
+                            desc={
+                                <span>
+                                    互動選單模式。顯示選單供使用者選擇安裝、偵測、移除或封裝。
+                                    <br />
+                                    <span className="text-slate-500 text-base">
+                                        (亦可直接執行目錄下的 <strong>1.互動模式.cmd</strong>)
+                                    </span>
+                                </span>
+                            } 
+                        />
+                        <CommandCard cmd="/d :[關鍵字]" desc="偵測模式。搜尋已安裝軟體的 MSI 代碼或 Appx 名稱。例如：AutoInstall.exe /d:chrome" />
+                        <CommandCard 
+                            cmd="/u :[關鍵字]" 
+                            desc={
+                                <span>
+                                    移除模式。根據關鍵字執行軟體移除指令。例如：<code>AutoInstall.exe /u:7-zip</code>
+                                    <br />
+                                    <span className="text-slate-500 text-base mt-2 block bg-white border border-slate-200 p-2 rounded">
+                                        <strong>💡 特殊用法 (/u:none)：</strong>
+                                        <br/>
+                                        若指定為 <code>/u:none</code>，程式將不做任何動作並直接回傳成功 (ExitCode 0)。
+                                        這對於 Intune 部署綠色軟體 (不需要移除程序) 時非常有用，可避免 Intune 因找不到移除指令而報錯。
+                                    </span>
+                                </span>
+                            } 
+                        />
+                        <CommandCard 
+                            cmd="/p :[封裝名稱]" 
+                            desc="封裝模式。自動下載工具並打包成 .intunewin 檔。例如：AutoInstall.exe /p:MyApp" 
+                        />
+                    </div>
+
+                    <div className="bg-slate-800 text-slate-200 p-6 rounded-lg mt-6">
+                        <h4 className="font-bold text-white mb-3">互動模式選單 (/i)</h4>
+                        <pre className="font-mono text-base">
+                        {`1. 自動安裝 (Auto Install)
+2. 偵測移除用顯示名稱 (/Detect)
+3. 使用顯示名稱移除程式 (/Uninstall)
+4. 自動封裝成 INTUNE Win32 應用程式 (/Pack)
+5. 結束程式 (Exit)`}
+                        </pre>
+                    </div>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [6. Packaging]
+                packaging: {
+                title: "6. 自動封裝 (Intune)",
+                icon: <Icons.Package />,
+                content: (
+                    <div className="space-y-6 text-slate-700">
+                    <p className="text-lg">
+                        AutoInstall 內建了強大的自動封裝引擎，旨在讓 Intune 封裝過程達到「零門檻」。
+                    </p>
+
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-lg shadow-sm mb-6">
+                        <h4 className="font-bold text-blue-800 text-xl mb-2 flex items-center gap-2">
+                            <Icons.Package className="w-6 h-6" />
+                            免手動下載封裝工具
+                        </h4>
+                        <p className="text-lg text-blue-900 leading-relaxed">
+                            您不需要去尋找或下載 <code>IntuneWinAppUtil.exe</code>。
+                            <br/>
+                            當您執行封裝指令時，程式會自動檢查目錄。若發現工具缺失，它會<strong>自動從 Microsoft 官方 GitHub 下載、解壓縮並設定好環境</strong>，全程無需人工介入。
+                        </p>
+                    </div>
+
+                    <h3 className="font-bold text-2xl text-slate-900 mb-4">封裝運作流程</h3>
+                    <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm">
+                        <ol className="relative border-l border-slate-200 ml-3 space-y-10">
+                            <li className="ml-6">
+                                <span className="absolute flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full -left-4 ring-8 ring-white text-blue-600 font-bold">1</span>
+                                <h3 className="font-bold text-lg text-slate-900 mb-1">準備檔案</h3>
+                                <p className="text-base text-slate-600">將 <code>AutoInstall.exe</code>、<code>config.ini</code> 與您的安裝檔 (如 <code>setup.exe</code>) 放在同一目錄下。</p>
+                            </li>
+                            <li className="ml-6">
+                                <span className="absolute flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full -left-4 ring-8 ring-white text-blue-600 font-bold">2</span>
+                                <h3 className="font-bold text-lg text-slate-900 mb-1">執行封裝指令</h3>
+                                <p className="text-base text-slate-600 mb-2">執行 <code>1.互動模式.cmd</code> 並選擇選項 4，或直接輸入指令 <code>AutoInstall.exe /p:軟體名稱</code>。</p>
+                            </li>
+                            <li className="ml-6">
+                                <span className="absolute flex items-center justify-center w-8 h-8 bg-yellow-100 rounded-full -left-4 ring-8 ring-white text-yellow-600 font-bold">3</span>
+                                <h3 className="font-bold text-lg text-slate-900 mb-1 flex items-center gap-2">
+                                    系統自動化處理 (背景執行)
+                                    <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full">Automated</span>
+                                </h3>
+                                <div className="bg-slate-50 p-4 rounded border border-slate-100 text-base text-slate-600 space-y-2 mt-2 font-mono">
+                                    <div className="flex gap-3 items-center">
+                                        <span className="text-blue-500 text-xl">📥</span> 
+                                        <span><strong>工具檢查：</strong>若無 <code>IntuneWinAppUtil.exe</code>，自動下載並解壓。</span>
+                                    </div>
+                                    <div className="flex gap-3 items-center">
+                                        <span className="text-purple-500 text-xl">🧹</span> 
+                                        <span><strong>建立淨室：</strong>建立暫存目錄，智慧複製 (自動排除 .git, .vs 等雜檔)。</span>
+                                    </div>
+                                    <div className="flex gap-3 items-center">
+                                        <span className="text-orange-500 text-xl">⚙️</span> 
+                                        <span><strong>設定補全：</strong>若 <code>ValidationTag</code> 為空，自動補上標記名稱。</span>
+                                    </div>
+                                    <div className="flex gap-3 items-center">
+                                        <span className="text-red-500 text-xl">📝</span> 
+                                        <span><strong>產生腳本：</strong>自動撰寫 <code>detect.ps1</code> 偵測腳本 (存於 _package 內)。</span>
+                                    </div>
+                                    <div className="flex gap-3 items-center">
+                                        <span className="text-green-500 text-xl">📦</span> 
+                                        <span><strong>執行封裝：</strong>呼叫微軟工具產生 <code>.intunewin</code> 檔案。</span>
+                                    </div>
+                                </div>
+                            </li>
+                            <li className="ml-6">
+                                <span className="absolute flex items-center justify-center w-8 h-8 bg-green-100 rounded-full -left-4 ring-8 ring-white text-green-600 font-bold">4</span>
+                                <h3 className="font-bold text-lg text-slate-900 mb-1">完成</h3>
+                                <p className="text-base text-slate-600">
+                                    取得 <code>.intunewin</code> 與 <code>detect.ps1</code>，直接上傳至 Intune 即可。
+                                </p>
+                            </li>
+                        </ol>
+                    </div>
+                    </div>
+                )
+                },
+                // #endregion
+
+                // #region [7. Troubleshooting]
+                troubleshooting: {
+                title: "7. 故障排除",
+                icon: <Icons.AlertCircle />,
+                content: (
+                    <div className="space-y-6 text-slate-700">
+                    <h3 className="font-bold text-2xl">Log 紀錄</h3>
+                    <p className="text-lg">
+                        程式執行過程會詳細記錄於以下位置：
+                    </p>
+                    <ul className="list-disc list-inside bg-slate-100 p-6 rounded text-lg font-mono text-slate-800">
+                        <li>C:\ProgramData\IntuneLogs\UniversalInstaller.log</li>
+                        <li>(當前目錄)\install.log</li>
+                    </ul>
+
+                    <h3 className="font-bold text-2xl mt-8">常見錯誤代碼</h3>
+                    <div className="overflow-hidden rounded-lg border border-slate-200">
+                        <table className="w-full text-lg text-left">
+                        <thead className="bg-slate-50">
+                            <tr>
+                            <th className="p-4 border-b">代碼</th>
+                            <th className="p-4 border-b">意義</th>
+                            <th className="p-4 border-b">解決方式</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                            <tr>
+                            <td className="p-4 font-mono text-red-600">1</td>
+                            <td className="p-4">一般錯誤 / 雜湊失敗</td>
+                            <td className="p-4">包含 Hash Mismatch 或其他例外錯誤。請查看 Log 檔案。</td>
+                            </tr>
+                            <tr>
+                            <td className="p-4 font-mono text-yellow-600">3010</td>
+                            <td className="p-4">需要軟重新啟動</td>
+                            <td className="p-4">安裝成功，但系統需要重開機。Intune 會自動處理此回傳碼。</td>
+                            </tr>
+                            <tr>
+                            <td className="p-4 font-mono text-slate-500">1618</td>
+                            <td className="p-4">安裝程式忙碌</td>
+                            <td className="p-4">背景有其他 MSI 正在執行，請稍後再試。</td>
+                            </tr>
+                        </tbody>
+                        </table>
+                    </div>
+                    </div>
+                )
+                }
+                // #endregion
+            };
+
+            const sections = Object.keys(manualData);
+            
+            // 處理列印模式的渲染
+            const renderContent = (key) => {
+                const data = manualData[key];
+                return (
+                    <div key={key} className={`mb-12 ${!printMode && key !== activeSection ? 'hidden' : 'block'} ${printMode ? 'print-break' : ''}`}>
+                        <div className="mb-8 pb-6 border-b border-slate-200">
+                            <h1 className="text-3xl md:text-5xl font-bold text-slate-900 mb-6 flex items-center gap-4">
+                                <span className="p-3 bg-blue-100 text-blue-600 rounded-lg no-print">
+                                    {data.icon}
+                                </span>
+                                {data.title}
+                            </h1>
+                        </div>
+                        <div className="prose prose-slate max-w-none">
+                            {data.content}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+                    {/* Sidebar - Desktop */}
+                    <aside className={`hidden md:flex w-72 flex-col bg-white border-r border-slate-200 shadow-sm transition-all ${printMode ? 'w-0 opacity-0 overflow-hidden' : ''}`}>
+                        <div className="p-6 border-b border-slate-100">
+                            <div className="flex items-center gap-3 text-blue-600 font-bold text-2xl">
+                                <Icons.Package />
+                                <span>AutoInstall</span>
+                            </div>
+                            <p className="text-base text-slate-400 mt-2">Universal Wrapper Manual</p>
+                        </div>
+                        <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+                            {sections.map(key => (
+                                <NavButton 
+                                    key={key} 
+                                    data={manualData[key]} 
+                                    isActive={activeSection === key} 
+                                    onClick={() => setActiveSection(key)} 
+                                />
+                            ))}
+                        </nav>
+                        <div className="p-6 border-t border-slate-100">
+                             <button 
+                                onClick={() => { setPrintMode(true); setTimeout(() => window.print(), 100); }}
+                                className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 text-lg font-medium"
+                            >
+                                <Icons.Printer />
+                                <span>列印 / 轉 PDF</span>
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* Mobile Header */}
+                    <div className="md:hidden fixed top-0 left-0 right-0 h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-20 no-print">
+                        <div className="flex items-center gap-3 font-bold text-slate-800 text-2xl">
+                            <Icons.Package />
+                            <span>AutoInstall Docs</span>
+                        </div>
+                        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-3 text-slate-600">
+                            {isMobileMenuOpen ? <Icons.X /> : <Icons.Menu />}
+                        </button>
+                    </div>
+
+                    {/* Mobile Menu Overlay */}
+                    {isMobileMenuOpen && (
+                        <div className="md:hidden fixed inset-0 bg-slate-900/50 z-10 no-print" onClick={() => setIsMobileMenuOpen(false)}>
+                            <div className="absolute top-20 left-0 w-72 bg-white h-[calc(100%-5rem)] shadow-xl overflow-y-auto p-6 space-y-2" onClick={e => e.stopPropagation()}>
+                                {sections.map(key => (
+                                    <NavButton 
+                                        key={key} 
+                                        data={manualData[key]} 
+                                        isActive={activeSection === key} 
+                                        onClick={() => {
+                                            setActiveSection(key);
+                                            setIsMobileMenuOpen(false);
+                                        }} 
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Main Content Area */}
+                    <main className="flex-1 overflow-y-auto pt-24 md:pt-0 scroll-smooth print:overflow-visible print:h-auto print:pt-0">
+                        <div className="max-w-5xl mx-auto p-10 md:p-16 min-h-full">
+                            
+                            {/* 列印模式下的退出按鈕 */}
+                            {printMode && (
+                                <div className="no-print mb-8 p-6 bg-yellow-50 border border-yellow-200 rounded flex justify-between items-center sticky top-0 z-50 shadow-md">
+                                    <span className="text-yellow-800 font-bold text-xl">目前為「列印/閱讀全本」模式</span>
+                                    <button 
+                                        onClick={() => setPrintMode(false)}
+                                        className="px-6 py-3 bg-white border border-slate-300 rounded hover:bg-slate-50 text-lg"
+                                    >
+                                        返回互動模式
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* 麵包屑導航 (僅在互動模式顯示) */}
+                            {!printMode && (
+                                <div className="flex items-center gap-3 text-lg text-slate-400 mb-8 no-print">
+                                    <span>Docs</span>
+                                    <Icons.ChevronRight />
+                                    <span className="text-blue-600 font-medium">{manualData[activeSection].title}</span>
+                                </div>
+                            )}
+
+                            {/* 內容渲染 */}
+                            {printMode 
+                                ? sections.map(key => renderContent(key))
+                                : renderContent(activeSection)
+                            }
+
+                            {/* 底部導航 (僅在互動模式顯示) */}
+                            {!printMode && (
+                                <div className="mt-20 pt-10 border-t border-slate-200 flex justify-between no-print">
+                                    <PrevNextNav current={activeSection} sections={sections} onChange={setActiveSection} manualData={manualData} />
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        // 輔助組件
+        function NavButton({ data, isActive, onClick }) {
+            // [微調] 處理子選單縮排效果
+            const isSubMenu = data.title.startsWith("4.") && !data.title.startsWith("4. 自動安裝指引"); 
+            
+            return (
+                <button
+                    onClick={onClick}
+                    className={`w-full flex items-center gap-4 px-5 py-4 rounded-lg text-lg font-medium transition-colors 
+                    ${isSubMenu ? 'pl-10 text-base' : ''} 
+                    ${isActive 
+                        ? 'bg-blue-50 text-blue-700' 
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                >
+                    <span className="w-6 h-6 flex-shrink-0">{data.icon}</span>
+                    {/* [微調] 標題顯示處理：支援 "4.1." 這種格式的分割 */}
+                    <span>{data.title.split('. ')[1] || data.title}</span>
+                </button>
+            );
+        }
+
+        function FeatureCard({ title, desc }) {
+            return (
+                <div className="p-6 border border-slate-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow break-inside-avoid">
+                    <h4 className="font-bold text-slate-800 text-xl mb-3">{title}</h4>
+                    <p className="text-lg text-slate-600 leading-relaxed">{desc}</p>
+                </div>
+            );
+        }
+
+        function ConfigRow({ k, v, e }) {
+            return (
+                <tr className="hover:bg-slate-50 transition-colors break-inside-avoid">
+                    <td className="p-4 border-b border-slate-100 font-mono text-blue-600 font-medium text-lg">{k}</td>
+                    <td className="p-4 border-b border-slate-100 text-slate-700 text-lg">{v}</td>
+                    <td className="p-4 border-b border-slate-100 text-base text-slate-500 font-mono bg-slate-50/50">{e}</td>
+                </tr>
+            );
+        }
+
+        function CommandCard({ cmd, desc }) {
+            return (
+                <div className="flex flex-col md:flex-row gap-3 md:items-start p-6 bg-slate-50 rounded border border-slate-200 break-inside-avoid">
+                    <code className="bg-slate-800 text-green-400 px-4 py-2 rounded font-mono text-lg whitespace-nowrap">
+                        {cmd}
+                    </code>
+                    <p className="text-lg text-slate-700 md:mt-1">{desc}</p>
+                </div>
+            );
+        }
+
+        function CodeBlock({ title, children }) {
+            return (
+                <div className="rounded-lg overflow-hidden border border-slate-200 shadow-sm break-inside-avoid">
+                    {title && (
+                        <div className="bg-slate-100 px-6 py-3 text-base font-bold text-slate-500 border-b border-slate-200">
+                            {title}
+                        </div>
+                    )}
+                    <pre className="bg-slate-50 p-6 overflow-x-auto text-lg font-mono text-slate-700">
+                        {children}
+                    </pre>
+                </div>
+            );
+        }
+
+        function PrevNextNav({ current, sections, onChange, manualData }) {
+            const idx = sections.indexOf(current);
+            const prev = idx > 0 ? sections[idx - 1] : null;
+            const next = idx < sections.length - 1 ? sections[idx + 1] : null;
+
+            return (
+                <>
+                    {prev ? (
+                        <button 
+                        onClick={() => onChange(prev)}
+                        className="flex flex-col items-start gap-2 group"
+                        >
+                        <span className="text-base text-slate-400 font-medium">上一章</span>
+                        <span className="text-blue-600 font-bold group-hover:underline flex items-center gap-2 text-lg">
+                            ← {manualData[prev].title.split('. ')[1] || manualData[prev].title}
+                        </span>
+                        </button>
+                    ) : <div />}
+
+                    {next ? (
+                        <button 
+                        onClick={() => onChange(next)}
+                        className="flex flex-col items-end gap-2 group"
+                        >
+                        <span className="text-base text-slate-400 font-medium">下一章</span>
+                        <span className="text-blue-600 font-bold group-hover:underline flex items-center gap-2 text-lg">
+                            {manualData[next].title.split('. ')[1] || manualData[next].title} →
+                        </span>
+                        </button>
+                    ) : <div />}
+                </>
+            );
+        }
+
+        // 渲染
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
